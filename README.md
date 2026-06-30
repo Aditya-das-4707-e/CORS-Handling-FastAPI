@@ -2,15 +2,19 @@
 
 This repository demonstrates how to configure and handle **Cross-Origin Resource Sharing (CORS)** in a FastAPI backend application, allowing it to securely communicate with a frontend client (like React running on `http://localhost:5173`) that is served from a different origin.
 
+This version has been updated to load environment and configuration parameters dynamically using an `.env` file and a centralized configuration settings loader.
+
 ---
 
 ## Table of Contents
 1. [What is CORS?](#what-is-cors)
 2. [Prerequisites](#prerequisites)
-3. [How CORS is Configured in FastAPI](#how-cors-is-configured-in-fastapi)
-4. [Backend CORS Middleware Parameters Explained](#backend-cors-middleware-parameters-explained)
-5. [Running the Backend](#running-the-backend)
-6. [How Frontend Connects to the Backend](#how-frontend-connects-to-the-backend)
+3. [Environment Configuration (`.env`)](#environment-configuration-env)
+4. [Centralized Configuration (`config.py`)](#centralized-configuration-configpy)
+5. [How CORS is Configured in FastAPI (`main.py`)](#how-cors-is-configured-in-fastapi-mainpy)
+6. [Backend CORS Middleware Parameters Explained](#backend-cors-middleware-parameters-explained)
+7. [Running the Backend](#running-the-backend)
+8. [How Frontend Connects to the Backend](#how-frontend-connects-to-the-backend)
 
 ---
 
@@ -29,36 +33,71 @@ Since your frontend (running on `http://localhost:5173`) is on a different origi
 
 ## Prerequisites
 
-To run the backend, ensure you have Python 3.7+ installed along with the required libraries:
+To run the backend, ensure you have Python 3.7+ installed along with the required libraries, including `python-dotenv` for loading environment variables:
 
 ```bash
-pip install fastapi uvicorn
+pip install fastapi uvicorn python-dotenv
 ```
 
 ---
 
-## How CORS is Configured in FastAPI
+## Environment Configuration (`.env`)
 
-In FastAPI, CORS is handled using the built-in `CORSMiddleware`. Here is how it is set up in `main.py`:
+Create a `.env` file in the root directory of your project to store environment-specific variables:
+
+```env
+SECRET_KEY = "mysecret"
+origins = [
+    "http://localhost:5173"
+]
+DB_URL = sqllite:///.test.db 
+```
+
+*   **`origins`**: Specifies the frontend application's origin that is allowed to interact with the backend API.
+*   **`SECRET_KEY`**: A secret key used for signing cryptographic tokens or sessions.
+*   **`DB_URL`**: The database connection string (e.g., SQLite filepath).
+
+---
+
+## Centralized Configuration (`config.py`)
+
+The application loads environment variables using the `dotenv` package and defines a structured `Settings` class to make them available across the app:
+
+```python
+import os 
+from dotenv import load_dotenv
+
+load_dotenv() # Read .env file for environment variables
+
+class Settings:
+    # Allow origins for frontend url 
+    origins = os.getenv("origins")
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    DB_URL = os.getenv("DB_URL")
+
+settings = Settings()
+```
+
+---
+
+## How CORS is Configured in FastAPI (`main.py`)
+
+In FastAPI, CORS is handled using the built-in `CORSMiddleware`. We import the initialized `settings` from `config.py` to fetch our allowed origins dynamically:
 
 ```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from config import settings
 
 app = FastAPI()
 
-# 1. Define the allowed origins
-origins = [
-    "http://localhost:5173"  # React/Vite development server
-]
-
-# 2. Add CORSMiddleware to the application
+# Add CORSMiddleware to the application using settings.origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # Only permit requests from specified origins
-    allow_credentials=True,      # Allow cookies, authorization headers, etc.
-    allow_methods=["*"],         # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],         # Allow all custom headers
+    allow_origins=settings.origins, # Allow frontend url from settings
+    allow_credentials=True,         # Allow cookies, authorization headers, etc.
+    allow_methods=["*"],            # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],            # Allow all custom headers
 )
 
 @app.get('/')
